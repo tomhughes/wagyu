@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-MASON_VERSION="b709931"
+MASON_VERSION="master"
 
 function setup_mason() {
     if [[ ! -d ./.mason ]]; then
@@ -14,8 +14,8 @@ function setup_mason() {
 }
 
 function install_clang() {
-    mason install clang 3.8.0
-    export PATH=$(mason prefix clang 3.8.0)/bin:${PATH}
+    mason install clang++ 3.9.0
+    export PATH=$(mason prefix clang++ 3.9.0)/bin:${PATH}
     export CXX=clang++
     export CC=clang
 }
