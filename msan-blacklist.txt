@@ -1,0 +1,2 @@
+# http://clang.llvm.org/docs/SanitizerSpecialCaseList.html
+src:tests/catch.hpp
