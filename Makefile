@@ -42,13 +42,22 @@ debug: build-debug build-fixture-tester
 	./test
 	./tests/run-geometry-tests.sh ./fixture-tester
 
+coverage: Makefile
+	./scripts/coverage.sh
+
 fuzzer: build-fuzzer
 	./fuzzer
 
+# avoids fuzzer getting deleted by make when it fails
+.PRECIOUS: fuzzer
+
 clean:
+	rm -rf *dSYM
 	rm -f test
 	rm -f fuzzer
 	rm -f fixture-tester
+
+distclean: clean
 	rm -rf ./mason_packages
 
 indent:

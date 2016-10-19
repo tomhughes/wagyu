@@ -246,7 +246,7 @@ bool fix_intersects(std::unordered_multimap<ring_ptr<T>, point_ptr_pair<T>>& dup
     if (ring_parent != ring_search->parent) {
         // The two holes do not have the same parent, do not add them
         // simply return!
-        if (poly2_contains_poly1(ring_search->points, ring_parent->points)) {
+        if (ring_parent->parent != ring_search && poly2_contains_poly1(ring_search->points, ring_parent->points)) {
             ring_ptr<T> old_parent = ring_search->parent;
             ring_search->parent = ring_parent;
             if (old_parent) {
@@ -853,7 +853,6 @@ bool handle_collinear_edges(point_ptr<T> pt1,
                             mapbox::geometry::point<T>& rewind_point) {
     ring_ptr<T> ring1 = pt1->ring;
     ring_ptr<T> ring2 = pt2->ring;
-
     if (ring1 == ring2) {
         return false;
     }
@@ -926,6 +925,11 @@ bool handle_collinear_edges(point_ptr<T> pt1,
             remove_ring(ring2, rings);
             return false;
         }
+        // We could have removed pt1 during this process..
+        // if we did we need to reassign pt2 to pt1
+        if (!pt1->ring) {
+            pt1 = pt2;
+        }
     }
     ring1->points = pt1;
     ring2->points = nullptr;
@@ -937,7 +941,6 @@ bool handle_collinear_edges(point_ptr<T> pt1,
         ring1_replaces_ring2(ring1, ring2, rings);
     }
     update_points_ring(ring1);
-
     update_duplicate_point_entries(ring2, dupe_ring);
 
     return true;
@@ -1123,11 +1126,10 @@ bool clockwise_of_next(point_ptr<T> const& origin, point_ptr<T> pt) {
             // We need to check which is after "origin->next" traveling
             // clockwise -- origin->prev or pt->prev
             orientation_type ot_prev_prev = orientation_of_points(origin, origin->prev, pt->prev);
-            if (ot_prev_prev == orientation_clockwise) {
+            if (ot_prev_prev == orientation_clockwise || ot_prev_prev == orientation_collinear_spike) {
                 // pt->prev is before this, so.. between the two.
                 return false;   
             } else {
-                // ot_prev_prev == orientation_collinear_spike
                 // ot_prev_prev == orientation_clockwise
                 // ot_prev_prev == orientation_collinear_line
                 return true;
@@ -1526,33 +1528,80 @@ si_point_vector<T> build_si_point_vector(std::size_t first_index,
 }
 
 template <typename T>
-void process_repeated_point_set(std::size_t first_index,
+bool process_repeated_point_set(std::size_t first_index,
                                 std::size_t last_index,
                                 std::size_t current_index,
                                 std::unordered_multimap<ring_ptr<T>, point_ptr_pair<T>>& dupe_ring,
                                 ring_manager<T>& rings) {
     point_ptr<T> point_1 = rings.all_points[current_index];
     if (!point_1->ring) {
-        return;
+        return false;
     }
 
-    //std::clog << "-----------------------" << std::endl;
+    // std::clog << "-----------------------" << std::endl;
     // Build point vector
     si_point_vector<T> vec = build_si_point_vector(first_index, last_index, current_index, point_1->ring, rings);
 
     if (vec.empty()) {
-        return;
+        return false;
     }
     
-    //std::clog << "----------" << std::endl;
+    // std::clog << "----------" << std::endl;
     // Sort points in vector
     std::stable_sort(vec.begin(), vec.end(), si_point_sorter<T>(point_1));
     
-    //std::clog << output_si_angles(point_1) << std::endl;
-    //std::clog << vec << std::endl;
-
-    point_ptr<T> point_2 = vec.front().first;
+    // std::clog << output_si_angles(point_1) << std::endl;
+    // std::clog << vec << std::endl;
+    
+    auto vec_itr = vec.begin();
+    point_ptr<T> point_2 = vec_itr->first;
+    
+    // If there are collinear sets of lines, we might not be able to just pick
+    // the first point in the sorted list (and we will have to do special processing).
+    if (vec.size() > 2) {
+        ++vec_itr;
+        point_ptr<T> point_3 = vec_itr->first;
+        orientation_type ot_next = orientation_of_points(point_2, point_2->next, point_3->next);
+        if (ot_next == orientation_collinear_spike) {
+            orientation_type ot_prev = orientation_of_points(point_2, point_2->prev, point_3->prev);
+            if (ot_prev == orientation_collinear_spike) {
+                // Lines follow the same path.
+                // Now we need to make a list of all the points that follow the same path BUT
+                // travel in the opposite direction.
+                ++vec_itr;
+                std::vector<point_ptr<T>> search_points;
+                while (vec_itr != vec.end()) {
+                    point_ptr<T> current_point = vec_itr->first;
+                    orientation_type ot_next_prev = orientation_of_points(point_2, point_2->next, current_point->prev);
+                    if (ot_next_prev == orientation_collinear_spike) {
+                        orientation_type ot_prev_next = orientation_of_points(point_2, point_2->prev, current_point->next);
+                        if (ot_prev_next == orientation_collinear_spike) {
+                            search_points.push_back(current_point);
+                        }
+                    }
+                    ++vec_itr;
+                }
+                if (search_points.empty()) {
+                    throw std::runtime_error("Collinear paths do not have path in opposite direction");
+                }
+                // Find next search_point that point_2 runs into.
+                point_ptr<T> pt = point_2->next;
+                while (pt != point_2) {
+                    if (*pt == *point_2 && search_points.end() != std::find(search_points.begin(), search_points.end(), pt)) {
+                        break;
+                    }
+                    pt = pt->next;
+                }
+                if (pt == point_2) {
+                    throw std::runtime_error("Could not find search point");
+                }
+                handle_self_intersections(point_2, pt, dupe_ring, rings);
+                return true;
+            }
+        }
+    }
     handle_self_intersections(point_1, point_2, dupe_ring, rings);
+    return false;
 }
 
 template <typename T>
@@ -1562,7 +1611,7 @@ void process_repeated_points(std::size_t first_index,
                              ring_manager<T>& rings) {
 
     for (std::size_t j = first_index; j <= last_index; ++j) {
-        process_repeated_point_set(first_index, last_index, j, dupe_ring, rings);      
+        while (process_repeated_point_set(first_index, last_index, j, dupe_ring, rings));      
     }
 
 #ifdef DEBUG
