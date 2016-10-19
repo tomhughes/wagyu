@@ -22,7 +22,7 @@ matrix:
           sources: [ 'ubuntu-toolchain-r-test' ]
           packages: [ 'libstdc++-4.9-dev' ]
     - os: linux
-      env: CXX=clang++ BUILDTYPE=Debug CXXFLAGS="-fsanitize=memory -fsanitize-blacklist=blacklist.txt" MASON_CLANG=true
+      env: CXX=clang++ BUILDTYPE=Debug CXXFLAGS="-fsanitize=memory -fsanitize-blacklist=msan-blacklist.txt" MASON_CLANG=true
       addons:
         apt:
           sources: [ 'ubuntu-toolchain-r-test' ]
