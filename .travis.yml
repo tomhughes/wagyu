@@ -1,6 +1,10 @@
 language: generic
 sudo: false
 
+env:
+  global:
+   - MSAN_OPTIONS=suppressions=msan-blacklist.txt
+
 matrix:
   include:
     - os: linux
