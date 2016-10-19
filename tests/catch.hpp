@@ -2544,6 +2544,11 @@ namespace Catch {
 
     struct IMutableRegistryHub {
         virtual ~IMutableRegistryHub();
+        #if defined(__has_feature)
+        #  if __has_feature(memory_sanitizer)
+        __attribute__((no_sanitize_memory))
+        #  endif
+        #endif
         virtual void registerReporter( std::string const& name, Ptr<IReporterFactory> const& factory ) = 0;
         virtual void registerListener( Ptr<IReporterFactory> const& factory ) = 0;
         virtual void registerTest( TestCase const& testInfo ) = 0;
