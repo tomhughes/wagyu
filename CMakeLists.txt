@@ -46,9 +46,6 @@ include_directories(SYSTEM ${MASON_PACKAGE_geometry_INCLUDE_DIRS})
 mason_use(catch VERSION 1.9.6 HEADER_ONLY)
 include_directories(SYSTEM ${MASON_PACKAGE_catch_INCLUDE_DIRS})
 
-mason_use(benchmark VERSION 1.4.1)
-include_directories(SYSTEM ${MASON_PACKAGE_benchmark_INCLUDE_DIRS})
-
 include_directories("${PROJECT_SOURCE_DIR}/include")
 
 file(GLOB TEST_SOURCES tests/unit/*.cpp)
@@ -59,11 +56,3 @@ add_executable(fixture-tests ${TEST_SOURCES})
 
 file(GLOB FUZZER_SOURCES fuzzer/*.cpp)
 add_executable(fuzzer-tests ${FUZZER_SOURCES})
-
-# libbenchmark.a supports threads and therefore needs pthread support
-find_package(Threads REQUIRED)
-file(GLOB BENCH_SOURCES bench/*.cpp)
-add_executable(bench-tests ${BENCH_SOURCES})
-
-# link benchmark static library to the bench-tests binary so the bench tests know where to find the benchmark impl code
-target_link_libraries(bench-tests ${MASON_PACKAGE_benchmark_STATIC_LIBS} ${MASON_PACKAGE_boost_libfilesystem_STATIC_LIBS} ${MASON_PACKAGE_boost_libsystem_STATIC_LIBS} ${CMAKE_THREAD_LIBS_INIT})
